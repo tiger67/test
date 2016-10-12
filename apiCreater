@@ -1,0 +1,143 @@
+
+//use angular 
+ angular
+        .module('InfoMiningApp')
+        .constant('apiUrlArray',[
+            /*------------------------------登录url-------------------------------*/
+            {name:'file/get-version',params:[],method:'get'},
+            {name:'user/login',params:["loginName","password"],method:'post'},
+            {name:'user/verification-code',params:[],method:'get'},
+            {name:'user/send-reset-password',params:["loginName"],method:'post'}
+            ])
+!function(){
+    angular.module('main')
+        .factory("API",["apiUrlArray","$http","commonService",function(apiUrlArray,$http,commonService){
+            var API={}, b,apiBaseUrl=location.protocol+"//"+location.host+"/api/index.php?r=";
+            for(var i=0;i<apiUrlArray.length;i++){
+                b=apiUrlArray[i];
+                API[b.name]=(function(b){
+                   return function(params,fn,isOriginal){
+                       params= params||{};
+                       if(b.params.indexOf('projecttag')>-1 && !params['projecttag']){
+                           params['projecttag']= commonService.getProjectTag();
+                       }
+                        fn && fn(b,params);
+                        var p= b.method==="post" ? {}:"";
+                        if(isOriginal && b.method==="post"){
+                            return $http.post(apiBaseUrl+b.name,params);
+                        }
+                        if(b.method=="post"){
+                            for(var j=0;j<b.params.length;j++){
+                                p[b.params[j]]=params[b.params[j]]===undefined ? '' : params[b.params[j]];
+                            }
+                            return $http.post(apiBaseUrl+b.name,p);
+                        }else{
+                            for(var j=0;j< b.params.length;j++){
+                                p+="&"+b.params[j]+"="+params[b.params[j]];
+                            }
+                            return $http.get(apiBaseUrl+b.name+p);
+                        }
+                    }
+                })(b)
+            }
+           // console.log(API);
+            return API;
+        }])
+    console.log(angular);
+}()
+
+/**
+ * then use  API['file/get-version']() 
+ */
+(function () {
+    angular.module('main')
+        .controller('LoginController', ['$state','$window', 'AuthToken','API',
+            LoginController]);
+    function LoginController($state,$window, AuthToken,API) {
+        var self = this;
+        self.loginData = {
+            loginname:null,
+            password:null
+        };
+
+        API['file/get-version']().then(function(response){
+            if(response.data.flag=='success'){
+                self.version=response.data.data;
+                self.version=self.version.replace(/\s+/," ");
+                var arr=self.version.split(" ");
+                self.version={
+                    versionName:arr[0],
+                    versionCode:arr[1]
+                }
+            }
+        })
+        self.logining = false;
+        var transform = function (data) {
+            return $.param(data);
+        };
+        self.init = function () {
+            window.sessionStorage.removeItem('project');
+            window.sessionStorage.removeItem('first');
+            window.sessionStorage.removeItem('respondent');
+        };
+
+        $("#loginname").trigger("click");
+        self.downloadApp = function (type) {
+            switch (type){
+                case 'android':
+                    $window.open('/download/apk/something.apk', '_blank');
+                    break;
+                case 'ios':
+                    break;
+            }
+        };
+         /*回车提交*/
+        self.keydownLogin=function($event){
+            if($event &&  $event.which===13){
+                if(!$("#login_button").isDisabled){
+                    self.login();
+                }else{
+                    if(self.loginData.loginname===''){
+                        $("#loginname").focus();
+                    }else{
+                        $("#password").focus();
+                    }
+                }
+            }
+        }
+
+        $('#password_label').parent().addClass("md-input-has-value");
+            self.login = function () {
+            self.u_errorInfo = null;
+            self.p_errorInfo = null;
+            self.logining = true;
+            API['user/login']({loginName:self.loginData.loginname,password:self.loginData.password})
+                .then(function(response){
+                    if (response.data.flag == 'success') {
+                        AuthToken.setToken(response.data.token);
+                        window.sessionStorage['respondent'] = response.data.respondent;
+                        if (response.data.respondent !== '1') {
+                            $state.go('project', {}, {reload: true});
+                        } else {
+                            window.sessionStorage['first'] = response.data.first;
+                            window.sessionStorage['project'] = angular.toJson({projecttag: response.data.projecttag});
+                            $state.go('respondent_home', {reload: true});
+                        }
+                    } else if (response.data.flag == 'error' && response.data.code == 1) {
+                        self.u_errorInfo = "该用户不存在";
+                        self.logining = false;
+                    } else if (response.data.flag == 'error' && response.data.code == 2) {
+                        self.u_errorInfo = "密码错误";
+                        self.logining = false;
+                    }
+            })
+        };
+
+        self.backtologin =function(){
+            $state.go('login')
+        }
+
+    }
+
+})();
+
