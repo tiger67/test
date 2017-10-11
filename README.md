@@ -1,5 +1,5 @@
 # picture
-
+<pre>
  a angular.module('project')
  .directive('imgShow',[function(){
             return {
@@ -76,4 +76,4 @@
                 }
             }
         }])
-
+</pre>
